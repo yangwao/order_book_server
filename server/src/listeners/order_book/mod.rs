@@ -422,15 +422,20 @@ impl DirectoryListener for OrderBookListener {
             let (height, event_batch) = match res {
                 Ok(data) => data,
                 Err(err) => {
+                    // Build a safe preview of the line (up to 100 *characters*).
+                    let preview: String = line.chars().take(100).collect();
+
                     // if we run into a serialization error (hitting EOF), just return to last line.
                     error!(
                         "{event_source} serialization error {err}, height: {:?}, line: {:?}",
                         self.order_book_state.as_ref().map(OrderBookState::height),
-                        &line[..100],
+                        preview,
                     );
                     #[allow(clippy::unwrap_used)]
                     let total_len: i64 = total_len.try_into().unwrap();
-                    self.file_mut(event_source).as_mut().map(|f| f.seek_relative(-total_len));
+                    self.file_mut(event_source)
+                        .as_mut()
+                        .map(|f| f.seek_relative(-total_len));
                     break;
                 }
             };
