@@ -116,7 +116,8 @@ mod tests {
     };
     use alloy::primitives::Address;
     use itertools::Itertools;
-    use std::{fs::create_dir_all, path::PathBuf};
+    use std::fs::create_dir_all;
+    use tempfile::tempdir;
 
     #[must_use]
     fn snapshot_to_l2_snapshot<O: InnerOrder>(
@@ -274,12 +275,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_deserialization_from_json() -> Result<()> {
-        create_dir_all("tmp/deserialization_test")?;
-        fs::write("tmp/deserialization_test/out.json", SNAPSHOT_JSON)?;
-        load_snapshots_from_json::<InnerL4Order, (Address, L4Order)>(&PathBuf::from(
-            "tmp/deserialization_test/out.json",
-        ))
-        .await?;
+        let temp_dir = tempdir()?;
+        let test_dir = temp_dir.path().join("deserialization_test");
+        create_dir_all(&test_dir)?;
+        let snapshot_path = test_dir.join("out.json");
+        fs::write(&snapshot_path, SNAPSHOT_JSON)?;
+        load_snapshots_from_json::<InnerL4Order, (Address, L4Order)>(&snapshot_path).await?;
         Ok(())
     }
 

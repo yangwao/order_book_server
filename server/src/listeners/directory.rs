@@ -40,9 +40,9 @@ mod tests {
         sync::{Arc, Mutex},
         time::Duration,
     };
+    use tempfile::tempdir;
     use tokio::{fs::File as TokioFile, io::AsyncWriteExt, sync::mpsc::unbounded_channel, time::sleep};
 
-    const MOCK_HL_DIR: &str = "tmp/ws_listener_test";
     const DATA: [&str; 2] = [
         r#"{"coin":"@151","side":"A","time":"2025-06-24T02:56:36.172847427","px":"2393.9","sz":"0.1539","hash":"0x2b21750229be769650b604261eaac1018c00c45812652efbbdd35fe0ecb201a1","trade_dir_override":"Na","side_info":[{"user":"0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00","start_pos":"1166.565307356","oid":105686971733,"twap_id":null,"cloid":"0x1070fff92506b3ab5e5aec135e5a5ddd"},{"user":"0xb65117c1e1006e7b2413fa90e96fcbe3fa83ed75","start_pos":"0.153928559","oid":105686976226,"twap_id":null,"cloid":null}]}
 {"coin":"@166","side":"A","time":"2025-06-24T02:56:36.172847427","px":"1.0003","sz":"184.11","hash":"0x0ffc6896b2147680820e04261eaac1018c0101735014e44b56f038478b13ad8f","trade_dir_override":"Na","side_info":[{"user":"0x107332a1729ba0bcf6171117815a87b72a7e6082","start_pos":"36301.55539655","oid":105686050113,"twap_id":null,"cloid":null},{"user":"0xb65117c1e1006e7b2413fa90e96fcbe3fa83ed75","start_pos":"184.12704003","oid":105686976227,"twap_id":null,"cloid":null}]}
@@ -213,7 +213,8 @@ mod tests {
     #[allow(clippy::significant_drop_tightening)]
     #[tokio::test]
     async fn test_trade_listener() -> Result<()> {
-        let mock_path = PathBuf::from(MOCK_HL_DIR);
+        let temp_dir = tempdir()?;
+        let mock_path = temp_dir.path().to_path_buf();
         let event_source = EventSource::Fills;
         create_dir_all(event_source.event_source_dir(&mock_path))?;
         let history = Arc::new(Mutex::new(String::new()));
