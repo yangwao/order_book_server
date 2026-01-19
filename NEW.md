@@ -2,6 +2,8 @@
 
 A practical guide for developers experienced in Python/Go who are new to Rust.
 
+**NOTE**: this guide was created on 2026-01-19, commit `cbeb1b5`, the project may have changed since then.
+
 ---
 
 ## What This Application Does
