@@ -8,15 +8,12 @@ on:
     branches:
       - main
 
-env:
-  RUST_TOOLCHAIN: stable
-
 jobs:
   clippy:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy, rustfmt
 
@@ -31,18 +28,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --workspace --all-features -- --shuffle
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo test -Z unstable-options --workspace --all-features -- --shuffle
 
   unit-tests-flaky:
     name: Unit tests (flaky)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
       - run: |
           for i in {1..16}; do
-            cargo test --workspace --all-features -- --shuffle
+            cargo test -Z unstable-options --workspace --all-features -- --shuffle
           done
 
   summary:
