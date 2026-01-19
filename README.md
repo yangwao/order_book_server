@@ -26,6 +26,8 @@ The `l4book` subscription first sends a snapshot of the entire book and then for
 
 ## Architecture Overview
 
+For a detailed guide with diagrams aimed at developers new to Rust, see [NEW.md](./NEW.md).
+
 - `server/` is the core library crate. It ingests node event files via `listeners/`, maintains order book state in `order_book/`, and exposes WebSocket/http handlers in `servers/`.
 - `binaries/` contains runnable entry points such as `websocket_server.rs`, which wires configuration, logging, and the `server` crate together.
 - Data flow: node event files -> listener parsing -> in-memory order books -> websocket subscriptions (`l2book`, `trades`, `l4book`).
