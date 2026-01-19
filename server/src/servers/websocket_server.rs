@@ -1,3 +1,22 @@
+use std::{
+    collections::{HashMap, HashSet},
+    env::home_dir,
+    sync::Arc,
+};
+
+use axum::{Router, response::IntoResponse, routing::get};
+use futures_util::{SinkExt, StreamExt};
+use log::{error, info};
+use tokio::{
+    net::TcpListener,
+    select,
+    sync::{
+        Mutex,
+        broadcast::{Sender, channel},
+    },
+};
+use yawc::{FrameView, OpCode, WebSocket};
+
 use crate::{
     listeners::order_book::{
         InternalMessage, L2SnapshotParams, L2Snapshots, OrderBookListener, TimedSnapshots, hl_listen,
@@ -11,25 +30,13 @@ use crate::{
         subscription::{ClientMessage, DEFAULT_LEVELS, ServerResponse, Subscription, SubscriptionManager},
     },
 };
-use axum::{Router, response::IntoResponse, routing::get};
-use futures_util::{SinkExt, StreamExt};
-use log::{error, info};
-use std::{
-    collections::{HashMap, HashSet},
-    env::home_dir,
-    sync::Arc,
-};
-use tokio::select;
-use tokio::{
-    net::TcpListener,
-    sync::{
-        Mutex,
-        broadcast::{Sender, channel},
-    },
-};
-use yawc::{FrameView, OpCode, WebSocket};
 
-pub async fn run_websocket_server(address: &str, ignore_spot: bool, compression_level: u32, inactivity_exit_secs: u64) -> Result<()> {
+pub async fn run_websocket_server(
+    address: &str,
+    ignore_spot: bool,
+    compression_level: u32,
+    inactivity_exit_secs: u64,
+) -> Result<()> {
     let (internal_message_tx, _) = channel::<Arc<InternalMessage>>(100);
 
     // Central task: listen to messages and forward them for distribution

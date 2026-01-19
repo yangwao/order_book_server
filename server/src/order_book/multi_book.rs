@@ -1,14 +1,16 @@
-use crate::{
-    order_book::{Coin, InnerOrder, Oid, OrderBook, Snapshot, Sz},
-    prelude::*,
-};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
 };
+
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use tokio::fs::read_to_string;
+
+use crate::{
+    order_book::{Coin, InnerOrder, Oid, OrderBook, Snapshot, Sz},
+    prelude::*,
+};
 
 pub(crate) struct Snapshots<O>(HashMap<Coin, Snapshot<O>>);
 
@@ -102,6 +104,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::fs::create_dir_all;
+
+    use alloy::primitives::Address;
+    use itertools::Itertools;
+    use tempfile::tempdir;
+
     use crate::{
         order_book::{
             InnerOrder, OrderBook, Px, Side, Snapshot, Sz,
@@ -114,10 +122,6 @@ mod tests {
             inner::{InnerL4Order, InnerLevel},
         },
     };
-    use alloy::primitives::Address;
-    use itertools::Itertools;
-    use std::fs::create_dir_all;
-    use tempfile::tempdir;
 
     #[must_use]
     fn snapshot_to_l2_snapshot<O: InnerOrder>(

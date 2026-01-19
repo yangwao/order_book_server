@@ -1,3 +1,12 @@
+use std::{
+    collections::{HashMap, VecDeque},
+    path::{Path, PathBuf},
+};
+
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use reqwest::Client;
+use serde_json::json;
+
 use crate::{
     listeners::order_book::{L2SnapshotParams, L2Snapshots},
     order_book::{
@@ -12,14 +21,6 @@ use crate::{
     },
 };
 use log::info;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use reqwest::Client;
-use serde_json::json;
-use std::collections::VecDeque;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
 use tokio::fs;
 
 /// Fetches an L4 snapshot and writes it to `out.json` in the given directory.

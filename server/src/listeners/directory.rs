@@ -1,7 +1,9 @@
-use crate::{prelude::*, types::node_data::EventSource};
+use std::path::PathBuf;
+
 use fs::File;
 use io::Read;
-use std::path::PathBuf;
+
+use crate::{prelude::*, types::node_data::EventSource};
 
 // We want all of these functions to be synchronous just for ease of use since they are fast (for now)
 // Asynchronous stuff can be done in the listen function (waiting for next file event)
@@ -26,22 +28,24 @@ pub(crate) trait DirectoryListener {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        listeners::directory::{DirectoryListener, EventSource},
-        prelude::*,
-    };
-    use fs::{File, create_dir_all, read_dir, remove_dir_all, remove_file};
-    use log::{error, info};
-    use notify::{RecursiveMode, Watcher, recommended_watcher};
-    use rand::{Rng, SeedableRng, rngs::StdRng};
     use std::{
         io::{Seek, SeekFrom},
         path::{Path, PathBuf},
         sync::{Arc, Mutex},
         time::Duration,
     };
+
+    use fs::{File, create_dir_all, read_dir, remove_dir_all, remove_file};
+    use log::{error, info};
+    use notify::{RecursiveMode, Watcher, recommended_watcher};
+    use rand::{Rng, SeedableRng, rngs::StdRng};
     use tempfile::tempdir;
     use tokio::{fs::File as TokioFile, io::AsyncWriteExt, sync::mpsc::unbounded_channel, time::sleep};
+
+    use crate::{
+        listeners::directory::{DirectoryListener, EventSource},
+        prelude::*,
+    };
 
     const DATA: [&str; 2] = [
         r#"{"coin":"@151","side":"A","time":"2025-06-24T02:56:36.172847427","px":"2393.9","sz":"0.1539","hash":"0x2b21750229be769650b604261eaac1018c00c45812652efbbdd35fe0ecb201a1","trade_dir_override":"Na","side_info":[{"user":"0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00","start_pos":"1166.565307356","oid":105686971733,"twap_id":null,"cloid":"0x1070fff92506b3ab5e5aec135e5a5ddd"},{"user":"0xb65117c1e1006e7b2413fa90e96fcbe3fa83ed75","start_pos":"0.153928559","oid":105686976226,"twap_id":null,"cloid":null}]}
