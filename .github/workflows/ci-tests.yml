@@ -31,21 +31,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo test -Z unstable-options --workspace --all-features -- --shuffle
 
-  unit-tests-flaky:
-    name: Unit tests (flaky)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: |
-          for i in {1..16}; do
-            cargo test -Z unstable-options --workspace --all-features -- --shuffle
-          done
-
   summary:
     name: CI Summary
     runs-on: ubuntu-24.04
-    needs: [clippy, unit-tests, unit-tests-flaky]
+    needs: [clippy, unit-tests]
     if: always() # Always run, even if earlier jobs fail
     steps:
       - name: Write CI summary
@@ -55,7 +44,6 @@ jobs:
             echo ""
             echo "- **Clippy + fmt:** ${{ needs.clippy.result }}"
             echo "- **Unit:** ${{ needs.unit-tests.result }}"
-            echo "- **Unit (flaky):** ${{ needs.unit-tests-flaky.result }}"
             echo ""
             echo "### Commit"
             echo "[${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})"

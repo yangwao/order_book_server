@@ -1,4 +1,4 @@
-name: CI Sanitizers
+name: CI Nightly
 
 on:
   workflow_dispatch:
@@ -39,10 +39,21 @@ jobs:
           RUSTFLAGS="-Z sanitizer=thread" \
           cargo +${{ env.RUST_TOOLCHAIN }} test --workspace --all-features -Z sanitizer=thread -Z build-std --target x86_64-unknown-linux-gnu
 
+  unit-tests-flaky:
+    name: Unit tests (flaky)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: |
+          for i in {1..16}; do
+            cargo test -Z unstable-options --workspace --all-features -- --shuffle
+          done
+
   summary:
     name: Sanitizer Summary
     runs-on: ubuntu-24.04
-    needs: [sanitizer-asan, sanitizer-tsan]
+    needs: [sanitizer-asan, sanitizer-tsan, unit-tests-flaky]
     if: always()
     steps:
       - name: Write CI summary
@@ -52,6 +63,7 @@ jobs:
             echo ""
             echo "- **ASan:** ${{ needs.sanitizer-asan.result }}"
             echo "- **TSan:** ${{ needs.sanitizer-tsan.result }}"
+            echo "- **Unit (flaky):** ${{ needs.unit-tests-flaky.result }}"
             echo ""
             echo "### Commit"
             echo "[${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})"
