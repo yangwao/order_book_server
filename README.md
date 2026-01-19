@@ -24,6 +24,12 @@ The `l4book` subscription first sends a snapshot of the entire book and then for
 }
 ```
 
+## Architecture Overview
+
+- `server/` is the core library crate. It ingests node event files via `listeners/`, maintains order book state in `order_book/`, and exposes WebSocket/http handlers in `servers/`.
+- `binaries/` contains runnable entry points such as `websocket_server.rs`, which wires configuration, logging, and the `server` crate together.
+- Data flow: node event files -> listener parsing -> in-memory order books -> websocket subscriptions (`l2book`, `trades`, `l4book`).
+
 ## Setup
 
 1. Run a non-validating node (from [`hyperliquid-dex/node`](https://github.com/hyperliquid-dex/node)). Requires batching by block. Requires recording fills, order statuses, and raw book diffs.
@@ -40,6 +46,14 @@ In addition, the local server periodically fetches order book snapshots from the
 If you want logging, prepend the command with `RUST_LOG=info`.
 
 The WebSocket server comes with compression built-in. The compression ratio can be tuned using the `--websocket-compression-level` flag.
+
+## Tests
+
+```bash
+cargo test --workspace
+```
+
+Runs all unit tests for the `server` and `binaries` crates.
 
 ## Caveats
 
