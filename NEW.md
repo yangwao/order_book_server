@@ -25,6 +25,24 @@ This server streams real-time order book data from a [Hyperliquid](https://hyper
 
 ---
 
+## API Overview
+
+Clients connect to `ws://<host>:<port>/ws` and send JSON messages using a simple subscribe envelope:
+
+```json
+{"method":"subscribe","subscription":{"type":"l2Book","coin":"ETH"}}
+{"method":"subscribe","subscription":{"type":"trades","coin":"BTC"}}
+{"method":"subscribe","subscription":{"type":"l4Book","coin":"ETH"}}
+```
+
+**Subscriptions:**
+- `l2Book`: Aggregated levels for a coin.
+  - Optional fields: `n_levels` (1-100, default 20), `sig_figs`, `mantissa`.
+- `trades`: Fill events for a coin.
+- `l4Book`: Full order-level book. Sends an initial snapshot, then block-by-block diffs.
+
+This server follows Hyperliquid’s WebSocket subscription format for `l2book` and `trades`, and adds `l4book` as an extra endpoint.
+
 ## Architecture at a Glance
 
 ```
@@ -352,8 +370,10 @@ Clients send JSON messages to subscribe:
 ### Quick Start
 
 ```bash
-# Build everything
+# Build everything (debug)
 cargo build --workspace
+# Build everything (release)
+cargo build --release
 
 # Run linter (required before commits)
 cargo clippy --workspace --all-targets --all-features -- -D warnings

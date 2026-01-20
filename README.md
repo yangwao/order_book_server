@@ -1,14 +1,12 @@
-# Local WebSocket Server
-
-## Disclaimer
-
-This was a standalone project, not written by the Hyperliquid Labs core team. It is made available "as is", without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or noninfringement. Use at your own risk. It is intended for educational or illustrative purposes only and may be incomplete, insecure, or incompatible with future systems. No commitment is made to maintain, update, or fix any issues in this repository.
-
-## Functionality
+# Hyperliquid Orderbook WebSocket Server
 
 This server provides the `l2book` and `trades` endpoints from [Hyperliquid’s official API](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions), with roughly the same API.
 
-- The `l2book` subscription now includes an optional field:
+## API
+
+Custom adaptions not included in the [official API](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions):
+
+- The `l2book` subscription includes an optional field:
   `n_levels`, which can be up to `100` and defaults to `20`.
 - This server also introduces a new endpoint: `l4book`.
 
@@ -34,7 +32,30 @@ For a detailed guide with diagrams aimed at developers new to Rust, see [NEW.md]
 
 ## Setup
 
-1. Run a non-validating node (from [`hyperliquid-dex/node`](https://github.com/hyperliquid-dex/node)). Requires batching by block. Requires recording fills, order statuses, and raw book diffs.
+### Rust
+
+This project uses nightly Rust for formatting and test shuffling. We recommend `rustup` as the toolchain manager.
+
+```bash
+# Install rustup (see rustup.rs for platform-specific instructions)
+rustup toolchain install nightly
+rustup component add rustfmt clippy --toolchain nightly
+
+# Use nightly for this repo
+rustup default nightly
+```
+
+### Git Hooks
+
+This repo ships a [pre-commit](.githooks/pre-commit) hook for formatting and linting. To enable it:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Running the Server
+
+1. Run a non-validating node (from [`hyperliquid-dex/node`](https://github.com/hyperliquid-dex/node)). Ensure batching by block is enabled and the node records fills, order statuses, and raw book diffs.
 
 2. Then run this local server:
 
@@ -44,17 +65,50 @@ cargo run --release --bin websocket_server -- --address 0.0.0.0 --port 8000
 cargo run --release --bin websocket_server -- --address 0.0.0.0 --port 8000 --inactivity-exit-secs 30
 ```
 
-If this local server does not detect the node writing down any new events, it will automatically exit after some amount of time (default 5 seconds; configurable via `--inactivity-exit-secs <secs>`).
-In addition, the local server periodically fetches order book snapshots from the node, and compares to its own internal state. If a difference is detected, it will exit.
+If this local server does not detect the node writing down any new events, it will automatically exit after some amount of time (default 5 seconds; configurable via `--inactivity-exit-secs <secs>`). In addition, the local server periodically fetches order book snapshots from the node, and compares to its own internal state. If a difference is detected, it will exit.
 
 If you want logging, prepend the command with `RUST_LOG=info`.
 
 The WebSocket server comes with compression built-in. The compression ratio can be tuned using the `--websocket-compression-level` flag.
 
-## Tests
+## Development
+
+### Format and Lint
 
 ```bash
+# Format
+cargo fmt --all
+
+# Lint
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
+
+Note: formatting line length set to max 120 columns in [rustfmt.toml](./rustfmt.toml).
+
+### Build
+
+```bash
+# Build everything (debug)
+cargo build --workspace
+# Build everything (release)
+cargo build --release
+```
+
+Build artifacts are written under `target/`:
+- Debug binaries in `target/debug/<bin_name>`
+- Release binaries in `target/release/<bin_name>`
+
+### Tests
+
+```bash
+# Run all tests
 cargo test --workspace
+# Run deeper tests (requires nightly)
+cargo test --workspace --all-features -- -Z unstable-options --shuffle
+
+# Run specific tests
+cargo test -p server              # Library crate only
+cargo test test_trade_listener    # Single test by name
 ```
 
 Runs all unit tests for the `server` and `binaries` crates.
