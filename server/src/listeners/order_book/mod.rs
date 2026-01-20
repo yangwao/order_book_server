@@ -291,25 +291,25 @@ impl OrderBookListener {
                 }
             }
         }
-        if self.is_ready() {
-            if let Some((order_statuses, order_diffs)) = self.pop_cache() {
-                self.order_book_state
-                    .as_mut()
-                    .map(|book| book.apply_updates(order_statuses.clone(), order_diffs.clone()))
-                    .transpose()?;
-                if let Some(cache) = &mut self.fetched_snapshot_cache {
-                    cache.push_back((order_statuses.clone(), order_diffs.clone()));
-                }
-                if let Some(tx) = &self.internal_message_tx {
-                    let tx = tx.clone();
-                    tokio::spawn(async move {
-                        let updates = Arc::new(InternalMessage::L4BookUpdates {
-                            diff_batch: order_diffs,
-                            status_batch: order_statuses,
-                        });
-                        let _unused = tx.send(updates);
+        if self.is_ready()
+            && let Some((order_statuses, order_diffs)) = self.pop_cache()
+        {
+            self.order_book_state
+                .as_mut()
+                .map(|book| book.apply_updates(order_statuses.clone(), order_diffs.clone()))
+                .transpose()?;
+            if let Some(cache) = &mut self.fetched_snapshot_cache {
+                cache.push_back((order_statuses.clone(), order_diffs.clone()));
+            }
+            if let Some(tx) = &self.internal_message_tx {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    let updates = Arc::new(InternalMessage::L4BookUpdates {
+                        diff_batch: order_diffs,
+                        status_batch: order_statuses,
                     });
-                }
+                    let _unused = tx.send(updates);
+                });
             }
         }
         Ok(())
@@ -452,14 +452,14 @@ impl DirectoryListener for OrderBookListener {
             }
         }
         let snapshot = self.l2_snapshots(true);
-        if let Some(snapshot) = snapshot {
-            if let Some(tx) = &self.internal_message_tx {
-                let tx = tx.clone();
-                tokio::spawn(async move {
-                    let snapshot = Arc::new(InternalMessage::Snapshot { l2_snapshots: snapshot.1, time: snapshot.0 });
-                    let _unused = tx.send(snapshot);
-                });
-            }
+        if let Some(snapshot) = snapshot
+            && let Some(tx) = &self.internal_message_tx
+        {
+            let tx = tx.clone();
+            tokio::spawn(async move {
+                let snapshot = Arc::new(InternalMessage::Snapshot { l2_snapshots: snapshot.1, time: snapshot.0 });
+                let _unused = tx.send(snapshot);
+            });
         }
         Ok(())
     }

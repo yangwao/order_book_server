@@ -40,7 +40,12 @@ mod tests {
     use notify::{RecursiveMode, Watcher, recommended_watcher};
     use rand::{Rng, SeedableRng, rngs::StdRng};
     use tempfile::tempdir;
-    use tokio::{fs::File as TokioFile, io::AsyncWriteExt, sync::mpsc::unbounded_channel, time::sleep};
+    use tokio::{
+        fs::File as TokioFile,
+        io::AsyncWriteExt,
+        sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+        time::sleep,
+    };
 
     use crate::{
         listeners::directory::{DirectoryListener, EventSource},
@@ -150,7 +155,11 @@ mod tests {
         Ok(())
     }
 
-    async fn create_mock_data(event_source: EventSource, mock_dir: &Path) -> Result<String> {
+    async fn create_mock_data(
+        event_source: EventSource,
+        mock_dir: &Path,
+        ready_rx: &mut UnboundedReceiver<()>,
+    ) -> Result<String> {
         // set up so that the directory is initially empty
         let mut res = String::new();
         sleep(Duration::from_millis(100)).await;
@@ -165,6 +174,7 @@ mod tests {
             res += data;
             let lines = data.split_whitespace();
             let mut mock_file = TokioFile::create(mock_dir.join((i + 1).to_string())).await?;
+            ready_rx.recv().await.ok_or("Listener readiness channel closed")?;
             for line in lines {
                 mock_file.write_all((line.to_string() + "\n").as_bytes()).await?;
                 mock_file.flush().await?;
@@ -182,6 +192,7 @@ mod tests {
     struct TestListener {
         file: Option<File>,
         history: Arc<Mutex<String>>,
+        ready_tx: UnboundedSender<()>,
     }
 
     impl DirectoryListener for TestListener {
@@ -196,6 +207,7 @@ mod tests {
         fn on_file_creation(&mut self, new_file: PathBuf, _event_source: EventSource) -> Result<()> {
             let file = File::open(new_file)?;
             self.file = Some(file);
+            let _unused = self.ready_tx.send(());
             Ok(())
         }
 
@@ -208,8 +220,8 @@ mod tests {
     }
 
     impl TestListener {
-        fn new(history: Arc<Mutex<String>>) -> Self {
-            Self { file: None, history }
+        fn new(history: Arc<Mutex<String>>, ready_tx: UnboundedSender<()>) -> Self {
+            Self { file: None, history, ready_tx }
         }
     }
 
@@ -222,7 +234,8 @@ mod tests {
         let event_source = EventSource::Fills;
         create_dir_all(event_source.event_source_dir(&mock_path))?;
         let history = Arc::new(Mutex::new(String::new()));
-        let mut test_listener = TestListener::new(history.clone());
+        let (ready_tx, mut ready_rx) = unbounded_channel();
+        let mut test_listener = TestListener::new(history.clone(), ready_tx);
         {
             let mock_path = mock_path.clone();
             tokio::spawn(async move {
@@ -233,7 +246,7 @@ mod tests {
         }
 
         // get desired output
-        let expected = create_mock_data(event_source, &mock_path).await?;
+        let expected = create_mock_data(event_source, &mock_path, &mut ready_rx).await?;
         sleep(Duration::from_secs(2)).await;
         let history = history.lock().unwrap();
         assert_eq!(*history, expected);
