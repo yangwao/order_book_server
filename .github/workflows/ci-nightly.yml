@@ -47,7 +47,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - run: |
           for i in {1..16}; do
-            cargo test -Z unstable-options --workspace --all-features -- --shuffle
+            cargo test --workspace --all-features -- -Z unstable-options --shuffle
           done
 
   summary:
