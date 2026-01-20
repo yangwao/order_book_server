@@ -4,7 +4,12 @@ use std::{
     sync::Arc,
 };
 
-use axum::{Router, http::StatusCode, response::{IntoResponse, Response}, routing::get};
+use axum::{
+    Router,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::get,
+};
 use futures_util::{SinkExt, StreamExt};
 use log::{error, info};
 use tokio::{
