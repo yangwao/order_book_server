@@ -45,6 +45,27 @@ rustup component add rustfmt clippy --toolchain nightly
 rustup default nightly
 ```
 
+### justfile
+
+Optional convenience commands are provided via `just`. Install it once:
+
+```bash
+cargo install just
+```
+
+Usage examples:
+
+```bash
+just --list # --unsorted (optional)
+just build
+just test
+just fmt
+just lint
+just clean
+just asan
+just tsan
+```
+
 ### Git Hooks
 
 This repo ships a [pre-commit](.githooks/pre-commit) hook for formatting and linting. To enable it:
