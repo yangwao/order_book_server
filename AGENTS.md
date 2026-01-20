@@ -7,17 +7,22 @@ Comprehensive guidance for AI assistants and developers working in this reposito
 ```bash
 # Build and lint
 cargo build --workspace
-cargo clippy --workspace          # Must pass before commits
+# Must pass before commits
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Run all tests
 cargo test --workspace
+# Run deeper tests (requires nightly)
+cargo test --workspace --all-features -- -Z unstable-options --shuffle
 
 # Run specific tests
 cargo test -p server              # Library crate only
 cargo test test_trade_listener    # Single test by name
 
 # Format code (max width 120)
-cargo fmt
+cargo fmt --all
+# Check only
+cargo fmt --all -- --check
 
 # Run the server
 RUST_LOG=info cargo run --release --bin websocket_server -- \
@@ -203,11 +208,12 @@ mod tests {
 ### Running Tests
 
 ```bash
-cargo test --workspace              # All tests
-cargo test -p server                # Library only
-cargo test test_order_book_add      # Single test
-cargo test -- --nocapture           # Show println! output
-RUST_LOG=debug cargo test           # With logging
+cargo test --workspace                                                  # All tests
+cargo test --workspace --all-features -- -Z unstable-options --shuffle  # Deeper tests (nightly)
+cargo test -p server                                                    # Library only
+cargo test test_order_book_add                                          # Single test
+cargo test -- --nocapture                                               # Show println! output
+RUST_LOG=debug cargo test                                               # With logging
 ```
 
 ## Development Workflow
@@ -216,21 +222,23 @@ RUST_LOG=debug cargo test           # With logging
 
 1. Read existing code to understand patterns before modifying
 2. Maintain consistency with current architecture (generic traits, error types, async patterns)
-3. Ensure clippy passes: `cargo clippy --workspace`
-4. Format code: `cargo fmt`
-5. Run relevant tests: `cargo test -p server` or `cargo test <specific_test>`
+3. Ensure clippy passes: `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+4. Format code: `cargo fmt --all`
+5. Run relevant tests as per [Running Tests](#running-tests)
 6. Update documentation if public API changes
 
 ### Commit Guidelines
 
+Assume the user will be handling any git interactions. If you are asked to help:
+
+- Use conventional commit prefixes
 - Use short, imperative messages: "fix panic in orderbook listener"
-- Optional type prefix: `fix:`, `feat:`, `test:`, `docs:`
 - Keep commits focused on single behavior change
 - Example history:
   ```
   fix: panic in orderbook listener
-  use yawc as default WebSocket crate supporting compression
-  update docs
+  feat: use yawc as default WebSocket crate supporting compression
+  docs: update readme
   ```
 
 ### Pull Request Guidelines

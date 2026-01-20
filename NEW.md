@@ -356,10 +356,12 @@ Clients send JSON messages to subscribe:
 cargo build --workspace
 
 # Run linter (required before commits)
-cargo clippy --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Run tests
 cargo test --workspace
+# Run deeper tests (nightly, shuffled)
+cargo test --workspace --all-features -- -Z unstable-options --shuffle
 
 # Run server (requires node running)
 RUST_LOG=info cargo run --release --bin websocket_server -- \
