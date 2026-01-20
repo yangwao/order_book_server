@@ -44,7 +44,7 @@ mod tests {
         fs::File as TokioFile,
         io::AsyncWriteExt,
         sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
-        time::sleep,
+        time::{sleep, timeout},
     };
 
     use crate::{
@@ -52,6 +52,7 @@ mod tests {
         prelude::*,
     };
 
+    const READY_TIMEOUT: Duration = Duration::from_secs(5);
     const DATA: [&str; 2] = [
         r#"{"coin":"@151","side":"A","time":"2025-06-24T02:56:36.172847427","px":"2393.9","sz":"0.1539","hash":"0x2b21750229be769650b604261eaac1018c00c45812652efbbdd35fe0ecb201a1","trade_dir_override":"Na","side_info":[{"user":"0xecb63caa47c7c4e77f60f1ce858cf28dc2b82b00","start_pos":"1166.565307356","oid":105686971733,"twap_id":null,"cloid":"0x1070fff92506b3ab5e5aec135e5a5ddd"},{"user":"0xb65117c1e1006e7b2413fa90e96fcbe3fa83ed75","start_pos":"0.153928559","oid":105686976226,"twap_id":null,"cloid":null}]}
 {"coin":"@166","side":"A","time":"2025-06-24T02:56:36.172847427","px":"1.0003","sz":"184.11","hash":"0x0ffc6896b2147680820e04261eaac1018c0101735014e44b56f038478b13ad8f","trade_dir_override":"Na","side_info":[{"user":"0x107332a1729ba0bcf6171117815a87b72a7e6082","start_pos":"36301.55539655","oid":105686050113,"twap_id":null,"cloid":null},{"user":"0xb65117c1e1006e7b2413fa90e96fcbe3fa83ed75","start_pos":"184.12704003","oid":105686976227,"twap_id":null,"cloid":null}]}
@@ -82,7 +83,12 @@ mod tests {
 "#,
     ];
 
-    async fn listen<L: DirectoryListener>(listener: &mut L, event_source: EventSource, dir: &Path) -> Result<()> {
+    async fn listen<L: DirectoryListener>(
+        listener: &mut L,
+        event_source: EventSource,
+        dir: &Path,
+        watcher_ready_tx: UnboundedSender<()>,
+    ) -> Result<()> {
         let event_source_dir = event_source.event_source_dir(dir).canonicalize()?;
         info!("Monitoring directory: {}", event_source_dir.display());
         // monitoring the directory via the notify crate (gives file system events)
@@ -95,6 +101,7 @@ mod tests {
         })?;
 
         watcher.watch(&event_source_dir, RecursiveMode::Recursive)?;
+        let _unused = watcher_ready_tx.send(());
         loop {
             match fs_event_rx.recv().await {
                 Some(Ok(event)) => {
@@ -174,7 +181,9 @@ mod tests {
             res += data;
             let lines = data.split_whitespace();
             let mut mock_file = TokioFile::create(mock_dir.join((i + 1).to_string())).await?;
-            ready_rx.recv().await.ok_or("Listener readiness channel closed")?;
+            let ready =
+                timeout(READY_TIMEOUT, ready_rx.recv()).await.map_err(|_| "Listener readiness channel timed out")?;
+            ready.ok_or("Listener readiness channel closed")?;
             for line in lines {
                 mock_file.write_all((line.to_string() + "\n").as_bytes()).await?;
                 mock_file.flush().await?;
@@ -235,15 +244,21 @@ mod tests {
         create_dir_all(event_source.event_source_dir(&mock_path))?;
         let history = Arc::new(Mutex::new(String::new()));
         let (ready_tx, mut ready_rx) = unbounded_channel();
+        let (watcher_ready_tx, mut watcher_ready_rx) = unbounded_channel();
         let mut test_listener = TestListener::new(history.clone(), ready_tx);
         {
             let mock_path = mock_path.clone();
+            let watcher_ready_tx = watcher_ready_tx.clone();
             tokio::spawn(async move {
-                if let Err(err) = listen(&mut test_listener, event_source, &mock_path).await {
+                if let Err(err) = listen(&mut test_listener, event_source, &mock_path, watcher_ready_tx).await {
                     error!("Listener error: {err}");
                 }
             });
         }
+
+        let watcher_ready =
+            timeout(READY_TIMEOUT, watcher_ready_rx.recv()).await.map_err(|_| "Watcher readiness channel timed out")?;
+        watcher_ready.ok_or("Watcher readiness channel closed")?;
 
         // get desired output
         let expected = create_mock_data(event_source, &mock_path, &mut ready_rx).await?;
