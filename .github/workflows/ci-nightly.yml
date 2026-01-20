@@ -24,7 +24,7 @@ jobs:
         run: |
           ASAN_OPTIONS=detect_leaks=0 \
           RUSTFLAGS="-Z sanitizer=address" \
-          cargo +${{ env.RUST_TOOLCHAIN }} test --workspace --all-features -Z sanitizer=address -Z build-std --target x86_64-unknown-linux-gnu
+          cargo +${{ env.RUST_TOOLCHAIN }} test --workspace --all-features -Z build-std --target x86_64-unknown-linux-gnu
 
   sanitizer-tsan:
     name: Sanitizer (TSan)
@@ -37,7 +37,8 @@ jobs:
       - name: ThreadSanitizer
         run: |
           RUSTFLAGS="-Z sanitizer=thread" \
-          cargo +${{ env.RUST_TOOLCHAIN }} test --workspace --all-features -Z sanitizer=thread -Z build-std --target x86_64-unknown-linux-gnu
+          RUSTDOCFLAGS="-Z sanitizer=thread" \
+          cargo +${{ env.RUST_TOOLCHAIN }} test --workspace --all-features -Z build-std --target x86_64-unknown-linux-gnu
 
   unit-tests-flaky:
     name: Unit tests (flaky)
