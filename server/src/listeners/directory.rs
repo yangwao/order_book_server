@@ -29,7 +29,6 @@ pub(crate) trait DirectoryListener {
 #[cfg(test)]
 mod tests {
     use std::{
-        io::{Seek, SeekFrom},
         path::{Path, PathBuf},
         sync::{Arc, Mutex},
         time::Duration,
@@ -43,7 +42,7 @@ mod tests {
     use tokio::{
         fs::File as TokioFile,
         io::AsyncWriteExt,
-        sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
+        sync::mpsc::{UnboundedSender, unbounded_channel},
         time::{sleep, timeout},
     };
 
@@ -83,7 +82,10 @@ mod tests {
 "#,
     ];
 
-    async fn listen<L: DirectoryListener>(
+    // Watch the directory and forward events to the listener.
+    // We read immediately after create/first modify because notify can emit modify without create,
+    // especially under sanitizers or slow scheduling.
+    async fn listen<L: TestDirectoryListener>(
         listener: &mut L,
         event_source: EventSource,
         dir: &Path,
@@ -111,25 +113,28 @@ mod tests {
                         if new_path.is_file() {
                             info!("-- Event: {} created --", new_path.display());
                             listener.on_file_creation(new_path.clone(), event_source)?;
+                            // Read immediately to avoid missing the first write.
+                            listener.on_file_modification(event_source)?;
                         }
                     }
                     // Check for `Modify` event (only if the file is already initialized)
                     else if event.kind.is_modify() {
                         let new_path = &event.paths[0];
                         if new_path.is_file() {
-                            // If we are not tracking anything right now, we treat a file update as declaring that it has been created.
-                            // Unfortunately, we miss the update that occurs at this time step.
-                            // We go to the end of the file to read for updates after that.
+                            // If we are not tracking anything right now, treat the modify event as a creation
+                            // and read immediately so the test doesn't miss the first write.
                             if listener.is_reading(event_source) {
+                                if listener.current_path().is_none_or(|path| path != new_path) {
+                                    info!("-- Event: {} created --", new_path.display());
+                                    listener.on_file_creation(new_path.clone(), event_source)?;
+                                }
+                                // Modify can arrive before create; treat it as a read signal.
                                 info!("-- Event: {} modified --", new_path.display());
-                                listener.on_file_modification(event_source)?;
                             } else {
                                 info!("-- Event: {} created --", new_path.display());
-                                let file = listener.file_mut(event_source);
-                                let mut new_file = File::open(new_path)?;
-                                new_file.seek(SeekFrom::End(0))?;
-                                *file = Some(new_file);
+                                listener.on_file_creation(new_path.clone(), event_source)?;
                             }
+                            listener.on_file_modification(event_source)?;
                         }
                     }
                 }
@@ -162,11 +167,8 @@ mod tests {
         Ok(())
     }
 
-    async fn create_mock_data(
-        event_source: EventSource,
-        mock_dir: &Path,
-        ready_rx: &mut UnboundedReceiver<()>,
-    ) -> Result<String> {
+    // Write mock data without per-file readiness waits so sanitizer timing can't deadlock the test.
+    async fn create_mock_data(event_source: EventSource, mock_dir: &Path) -> Result<String> {
         // set up so that the directory is initially empty
         let mut res = String::new();
         sleep(Duration::from_millis(100)).await;
@@ -181,9 +183,6 @@ mod tests {
             res += data;
             let lines = data.split_whitespace();
             let mut mock_file = TokioFile::create(mock_dir.join((i + 1).to_string())).await?;
-            let ready =
-                timeout(READY_TIMEOUT, ready_rx.recv()).await.map_err(|_| "Listener readiness channel timed out")?;
-            ready.ok_or("Listener readiness channel closed")?;
             for line in lines {
                 mock_file.write_all((line.to_string() + "\n").as_bytes()).await?;
                 mock_file.flush().await?;
@@ -197,11 +196,16 @@ mod tests {
         Ok(res)
     }
 
-    // will listen to file events and collect their results in the history field
+    // Test listener needs to expose the current path to handle out-of-order events.
+    trait TestDirectoryListener: DirectoryListener {
+        fn current_path(&self) -> Option<&Path>;
+    }
+
+    // Test listener used to validate filesystem event handling.
     struct TestListener {
         file: Option<File>,
         history: Arc<Mutex<String>>,
-        ready_tx: UnboundedSender<()>,
+        current_path: Option<PathBuf>,
     }
 
     impl DirectoryListener for TestListener {
@@ -214,9 +218,9 @@ mod tests {
         }
 
         fn on_file_creation(&mut self, new_file: PathBuf, _event_source: EventSource) -> Result<()> {
-            let file = File::open(new_file)?;
+            let file = File::open(&new_file)?;
             self.file = Some(file);
-            let _unused = self.ready_tx.send(());
+            self.current_path = Some(new_file);
             Ok(())
         }
 
@@ -228,9 +232,15 @@ mod tests {
         }
     }
 
+    impl TestDirectoryListener for TestListener {
+        fn current_path(&self) -> Option<&Path> {
+            self.current_path.as_deref()
+        }
+    }
+
     impl TestListener {
-        fn new(history: Arc<Mutex<String>>, ready_tx: UnboundedSender<()>) -> Self {
-            Self { file: None, history, ready_tx }
+        fn new(history: Arc<Mutex<String>>) -> Self {
+            Self { file: None, history, current_path: None }
         }
     }
 
@@ -243,9 +253,8 @@ mod tests {
         let event_source = EventSource::Fills;
         create_dir_all(event_source.event_source_dir(&mock_path))?;
         let history = Arc::new(Mutex::new(String::new()));
-        let (ready_tx, mut ready_rx) = unbounded_channel();
         let (watcher_ready_tx, mut watcher_ready_rx) = unbounded_channel();
-        let mut test_listener = TestListener::new(history.clone(), ready_tx);
+        let mut test_listener = TestListener::new(history.clone());
         {
             let mock_path = mock_path.clone();
             let watcher_ready_tx = watcher_ready_tx.clone();
@@ -261,7 +270,7 @@ mod tests {
         watcher_ready.ok_or("Watcher readiness channel closed")?;
 
         // get desired output
-        let expected = create_mock_data(event_source, &mock_path, &mut ready_rx).await?;
+        let expected = create_mock_data(event_source, &mock_path).await?;
         sleep(Duration::from_secs(2)).await;
         let history = history.lock().unwrap();
         assert_eq!(*history, expected);
