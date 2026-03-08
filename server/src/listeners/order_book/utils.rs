@@ -23,27 +23,30 @@ use crate::{
 use log::info;
 use tokio::fs;
 
-/// Fetches an L4 snapshot and writes it to `out.json` in the given directory.
+/// Fetches an L4 snapshot and writes it to `out.json`.
 ///
-/// First attempts the `fileSnapshot` API (available on full nodes). If that fails
-/// (e.g. when the node is started with `--serve-info`), falls back to reading
-/// the latest periodic ABCI state file and computing L4 snapshots via the
-/// `hl-node compute-l4-snapshots` CLI command.
+/// First attempts the `fileSnapshot` API. The output path for the API is set
+/// inside `hl/` (the shared volume) so the node process can write it and the
+/// order book server can read it — important when running in separate containers.
 ///
-/// The fallback requires `hl-node` to be available (on PATH or via `HL_NODE_PATH`
-/// env var) and periodic ABCI state files to exist on disk.
+/// If the API fails, falls back to reading the latest periodic ABCI state file
+/// and computing L4 snapshots via `hl-node compute-l4-snapshots`. The fallback
+/// requires `hl-node` on PATH (or via `HL_NODE_PATH` env var).
 pub(super) async fn process_rmp_file(dir: &Path) -> Result<PathBuf> {
-    let output_path = dir.join("out.json");
+    // API: write into the shared volume so the node and OBS can both access it
+    let api_output_path = dir.join("hl/out.json");
+    // CLI: write to local filesystem (OBS runs hl-node as a subprocess)
+    let cli_output_path = dir.join("out.json");
 
-    match process_via_api(&output_path).await {
-        Ok(()) => return Ok(output_path),
+    match process_via_api(&api_output_path).await {
+        Ok(()) => return Ok(api_output_path),
         Err(err) => {
             info!("fileSnapshot API unavailable ({err}), trying periodic ABCI state fallback");
         }
     }
 
-    process_via_cli(dir, &output_path).await?;
-    Ok(output_path)
+    process_via_cli(dir, &cli_output_path).await?;
+    Ok(cli_output_path)
 }
 
 async fn process_via_api(output_path: &Path) -> Result<()> {
