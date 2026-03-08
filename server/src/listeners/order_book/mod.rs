@@ -112,7 +112,14 @@ pub(crate) async fn hl_listen(listener: Arc<Mutex<OrderBookListener>>, dir: Path
                         return Err("Snapshot fetch task sender dropped".into());
                     }
                     Some(Err(err)) => {
-                        return Err(format!("Abci state reading error: {err}").into());
+                        let is_initialized = listener.lock().await.is_ready();
+                        if is_initialized {
+                            // Already have a working order book — skip validation, don't crash
+                            error!("Snapshot validation error (non-fatal): {err}");
+                        } else {
+                            // Not yet initialized — log and wait for next tick to retry
+                            error!("Snapshot fetch error (will retry): {err}");
+                        }
                     }
                     Some(Ok(())) => {}
                 }
