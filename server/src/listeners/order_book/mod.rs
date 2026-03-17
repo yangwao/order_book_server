@@ -70,6 +70,7 @@ pub(crate) async fn hl_listen(
     // every so often, we fetch a new snapshot and the snapshot_fetch_task starts running.
     // Result is sent back along this channel (if error, we want to return to top level)
     let (snapshot_fetch_task_tx, mut snapshot_fetch_task_rx) = unbounded_channel::<Result<()>>();
+    let fetch_in_progress = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     watcher.watch(&order_statuses_dir, RecursiveMode::Recursive)?;
     watcher.watch(&fills_dir, RecursiveMode::Recursive)?;
@@ -131,9 +132,13 @@ pub(crate) async fn hl_listen(
                 }
             }
             _ = ticker.tick() => {
-                let listener = listener.clone();
-                let snapshot_fetch_task_tx = snapshot_fetch_task_tx.clone();
-                fetch_snapshot(dir.clone(), listener, snapshot_fetch_task_tx, ignore_spot);
+                if !fetch_in_progress.load(std::sync::atomic::Ordering::Relaxed) {
+                    let listener = listener.clone();
+                    let snapshot_fetch_task_tx = snapshot_fetch_task_tx.clone();
+                    let fetch_in_progress = fetch_in_progress.clone();
+                    fetch_in_progress.store(true, std::sync::atomic::Ordering::Relaxed);
+                    fetch_snapshot(dir.clone(), listener, snapshot_fetch_task_tx, ignore_spot, fetch_in_progress);
+                }
             }
             () = sleep(Duration::from_secs(inactivity_exit_secs)) => {
                 let listener = listener.lock().await;
@@ -150,6 +155,7 @@ fn fetch_snapshot(
     listener: Arc<Mutex<OrderBookListener>>,
     tx: UnboundedSender<Result<()>>,
     ignore_spot: bool,
+    fetch_in_progress: Arc<std::sync::atomic::AtomicBool>,
 ) {
     let tx = tx.clone();
     tokio::spawn(async move {
@@ -196,6 +202,7 @@ fn fetch_snapshot(
             Err(err) => Err(err),
         };
         let _unused = tx.send(res);
+        fetch_in_progress.store(false, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     });
 }

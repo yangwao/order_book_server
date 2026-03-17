@@ -61,9 +61,11 @@ async fn process_via_api(output_path: &Path) -> Result<()> {
         "includeHeightInOutput": true
     });
 
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()?;
     client
-        .post("http://localhost:3001/info")
+        .post("http://localhost:4001/info")
         .header("Content-Type", "application/json")
         .json(&payload)
         .send()
